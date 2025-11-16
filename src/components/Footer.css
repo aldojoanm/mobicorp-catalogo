@@ -1,0 +1,13 @@
+.footer {
+  margin-top: auto;
+  padding: 16px 5vw;
+  text-align: center;
+  font-size: 13px;
+  background: #f3f3f3;
+  color: #555;
+}
+
+.footer__link {
+  color: #333;
+  cursor: pointer;
+}
