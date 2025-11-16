@@ -7,12 +7,6 @@ import "./SpacePlanner.css";
 
 const WHATSAPP_NUMBER = "59169780623";
 
-// === URL DEL BACKEND DE IA ===
-// En producción (Netlify) pon VITE_SPACE_PLANNER_URL con la URL completa de tu backend,
-// por ejemplo: https://tu-backend.onrender.com/api/space-planner
-const SPACE_PLANNER_URL =
-  import.meta.env.VITE_SPACE_PLANNER_URL || "/api/space-planner";
-
 // ====== TIPOS DEL BACKEND ======
 type ApiProducto = {
   idProducto: number;
@@ -54,25 +48,8 @@ type PlannerResponse = {
   suggestionText: string;
 };
 
-// === NGROK + NORMALIZACIÓN DE IMÁGENES (igual que Designer) ===
 const API_BASE = "https://fa9e157e59cc.ngrok-free.app";
-const PRODUCTS_URL = `${API_BASE}/api/entities/productos/?format=json`;
-
-function normalizeImageUrl(u: string | null | undefined): string | null {
-  if (!u) return null;
-  let url = u.trim();
-  if (!url) return null;
-
-  if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
-  }
-
-  if (!url.startsWith("/")) {
-    url = "/" + url;
-  }
-
-  return `${API_BASE}${url}`;
-}
+const PRODUCTS_URL = `${API_BASE}/api/entities/productos/`;
 
 export function SpacePlanner() {
   const [width, setWidth] = useState("");
@@ -94,7 +71,7 @@ export function SpacePlanner() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [errorProducts, setErrorProducts] = useState<string | null>(null);
 
-  // === CARGAR PRODUCTOS DESDE BACKEND (mismo patrón que Designer) ===
+  // === CARGAR PRODUCTOS DESDE BACKEND (igual que Designer) ===
   useEffect(() => {
     const loadProducts = async () => {
       try {
@@ -103,66 +80,21 @@ export function SpacePlanner() {
 
         const resp = await fetch(PRODUCTS_URL, {
           cache: "no-store",
-          headers: {
-            Accept: "application/json",
-            "ngrok-skip-browser-warning": "1",
-          },
+          headers: { Accept: "application/json" },
         });
+        if (!resp.ok) throw new Error("No pudimos cargar los productos");
 
-        const text = await resp.text();
-        const trimmed = text.trim();
-
-        if (!resp.ok) {
-          console.error(
-            "[SpacePlanner] Status no OK:",
-            resp.status,
-            resp.statusText,
-            trimmed.slice(0, 200)
-          );
-          throw new Error("No pudimos cargar los productos");
-        }
-
-        if (!trimmed) {
-          throw new Error("Respuesta vacía del backend");
-        }
-
-        if (trimmed.startsWith("<")) {
-          console.warn(
-            "[SpacePlanner] Backend respondió HTML, no JSON. Primeras líneas:\n",
-            trimmed.slice(0, 300)
-          );
-          throw new Error(
-            "La URL de catálogo está devolviendo HTML (probablemente la página de ngrok)."
-          );
-        }
-
-        let data: ApiProducto[];
-        try {
-          data = JSON.parse(trimmed) as ApiProducto[];
-        } catch (e) {
-          console.error("[SpacePlanner] Error parseando JSON:", e);
-          throw new Error("La respuesta del backend no es JSON válido.");
-        }
+        const data = (await resp.json()) as ApiProducto[];
 
         const mapped: PlannerProduct[] = data
           .filter((p) => p.activo !== false)
           .map((p) => {
-            const fromArray: string[] =
+            const gallery =
               p.imageUrls && p.imageUrls.length > 0
                 ? p.imageUrls
-                    .map((u) => normalizeImageUrl(u))
-                    .filter((x): x is string => !!x)
+                : p.imageUrl
+                ? [p.imageUrl]
                 : [];
-
-            const single = normalizeImageUrl(p.imageUrl);
-
-            const gallery =
-              fromArray.length > 0
-                ? fromArray
-                : single
-                ? [single]
-                : [];
-
             const mainImage = gallery[0] ?? "";
 
             return {
@@ -177,7 +109,7 @@ export function SpacePlanner() {
 
         setProducts(mapped);
       } catch (err) {
-        console.error("[SpacePlanner] No se pudo cargar el catálogo:", err);
+        console.error(err);
         setErrorProducts("No pudimos cargar el catálogo.");
       } finally {
         setLoadingProducts(false);
@@ -218,48 +150,6 @@ export function SpacePlanner() {
       setIsGenerating(true);
       setSuggestionText("");
 
-      // Texto compacto que el backend puede usar como hint
-      const promptHintLines: string[] = [];
-
-      promptHintLines.push(
-        "Genera una recomendación muy breve y clara para amoblar este espacio de oficina."
-      );
-      promptHintLines.push("");
-      promptHintLines.push("Datos del espacio:");
-      promptHintLines.push(
-        `- Dimensiones (m): ancho ${width || "?"}, largo ${
-          length || "?"
-        }, altura ${height || "?"}`
-      );
-      if (seats) promptHintLines.push(`- Puestos de trabajo: ${seats}`);
-      promptHintLines.push(`- Tipo de espacio: ${spaceType}`);
-      promptHintLines.push(`- Estilo: ${style}`);
-      promptHintLines.push(`- Prioridad: ${priority}`);
-      promptHintLines.push(`- Nivel de inversión: ${budget}`);
-
-      if (detailedCart.length > 0) {
-        promptHintLines.push("");
-        promptHintLines.push("Modelos de referencia seleccionados:");
-        detailedCart.forEach((ci) => {
-          promptHintLines.push(
-            `- ${ci.product.name} (${ci.product.category}, línea ${ci.product.line}) x${ci.qty}`
-          );
-        });
-      }
-
-      if (extraNotes) {
-        promptHintLines.push("");
-        promptHintLines.push("Notas adicionales del cliente:");
-        promptHintLines.push(extraNotes);
-      }
-
-      promptHintLines.push("");
-      promptHintLines.push(
-        "Devuelve un texto muy corto, directo y fácil de leer, sin listas ni títulos."
-      );
-
-      const promptHint = promptHintLines.join("\n");
-
       const payload = {
         width,
         length,
@@ -277,10 +167,9 @@ export function SpacePlanner() {
           line: ci.product.line,
           qty: ci.qty,
         })),
-        promptHint,
       };
 
-      const resp = await fetch(SPACE_PLANNER_URL, {
+      const resp = await fetch("/api/space-planner", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -306,50 +195,52 @@ export function SpacePlanner() {
     const lines: string[] = [];
 
     lines.push(
-      "Hola 👋 Me gustaría asesoría para amoblar un espacio con Mobicorp."
+      "Hola, quiero asesoría para el diseño de un espacio con mobiliario Mobicorp 👋"
     );
     lines.push("");
 
-    lines.push("📐 Medidas aproximadas");
-    lines.push(`• Ancho: ${width || "?"} m`);
-    lines.push(`• Largo: ${length || "?"} m`);
-    if (height) lines.push(`• Altura: ${height} m`);
-    if (seats) lines.push(`• Puestos de trabajo: ${seats}`);
+    lines.push("📐 Dimensiones aproximadas:");
+    lines.push(`- Ancho: ${width || "?"} m`);
+    lines.push(`- Largo: ${length || "?"} m`);
+    if (height) lines.push(`- Altura: ${height} m`);
+    if (seats) lines.push(`- Nº de puestos: ${seats}`);
     lines.push("");
 
-    lines.push("🏢 Detalles del espacio");
-    lines.push(`• Tipo de espacio: ${spaceType || "sin especificar"}`);
-    lines.push(`• Estilo: ${style}`);
-    lines.push(`• Prioridad: ${priority}`);
-    lines.push(`• Nivel de inversión: ${budget}`);
+    lines.push("🏢 Tipo de espacio y estilo:");
+    lines.push(`- Tipo de espacio: ${spaceType || "sin especificar"}`);
+    lines.push(`- Estilo: ${style}`);
+    lines.push(`- Prioridad: ${priority}`);
+    lines.push(`- Nivel de inversión: ${budget}`);
     lines.push("");
 
     if (detailedCart.length > 0) {
-      lines.push("🪑 Modelos que me interesan");
+      lines.push("🪑 Modelos de interés (pre-carrito):");
       detailedCart.forEach((ci) => {
         lines.push(
-          `• ${ci.product.name} (${ci.product.category}, línea ${ci.product.line}) x${ci.qty}`
+          `- ${ci.product.category} – ${ci.product.name} (línea ${ci.product.line}) x${ci.qty}`
         );
       });
       lines.push("");
     } else if (!loadingProducts && !errorProducts) {
-      lines.push("🪑 Aún no elegí modelos. Necesito recomendaciones.");
+      lines.push(
+        "🪑 Aún no he seleccionado modelos, necesito recomendaciones."
+      );
       lines.push("");
     }
 
     if (extraNotes) {
-      lines.push("📝 Notas adicionales");
+      lines.push("📝 Notas adicionales:");
       lines.push(extraNotes);
       lines.push("");
     }
 
     if (suggestionText) {
-      lines.push("🧠 Resumen generado con IA (demo)");
+      lines.push("🧠 Recomendación generada por IA (demo):");
       lines.push(suggestionText);
       lines.push("");
     }
 
-    lines.push("¿Pueden ayudarme a definir la mejor propuesta?");
+    lines.push("¿Pueden ayudarme a definir la mejor propuesta? 🙌");
 
     const text = encodeURIComponent(lines.join("\n"));
     const ua = navigator.userAgent || "";
@@ -369,9 +260,9 @@ export function SpacePlanner() {
           <div>
             <h2 className="planner-title">Asesor de espacios con IA</h2>
             <p className="planner-sub">
-              Ingresa las medidas de tu espacio y el estilo que buscas. Si ya
-              tienes un pre-pedido en el catálogo, la IA lo usará como base para
-              sugerirte distribución y tipos de mobiliario.
+              Completa los datos de tu oficina y, si ya armaste un pre-pedido en
+              el catálogo interactivo, lo usaremos como base para recomendar
+              distribución, tipos de sillas y zonas clave de tu ambiente.
             </p>
           </div>
           <span className="planner-badge">Asesoría IA</span>
@@ -500,18 +391,17 @@ export function SpacePlanner() {
 
               <div className="planner-field planner-field--full">
                 <label className="planner-label">
-                  Notas para el asesor
+                  Notas adicionales para el asesor
                   <span className="planner-hint">
                     {" "}
-                    (uso del espacio, tipo de empresa, planes de crecimiento,
-                    etc.)
+                    (uso del espacio, tipo de empresa, crecimiento futuro, etc.)
                   </span>
                 </label>
                 <textarea
                   className="planner-input planner-textarea"
                   value={extraNotes}
                   onChange={(e) => setExtraNotes(e.target.value)}
-                  placeholder="Ej: Necesitamos área para visitas, una sala de reunión interna y dejar prevista expansión a 4 puestos más."
+                  placeholder="Ej: Necesitamos espacio para visitas, una pequeña sala de reunión interna y dejar prevista expansión a 4 puestos más."
                 />
               </div>
 
@@ -544,8 +434,9 @@ export function SpacePlanner() {
                   Resumen de tu selección
                 </h3>
                 <p className="planner-preview-sub">
-                  Usamos tu pre-pedido del catálogo como referencia. Puedes
-                  seguir ajustando modelos en el catálogo interactivo.
+                  Usamos tu pre-carrito del catálogo como referencia para
+                  ajustar la propuesta. Puedes seguir editando tu pedido en el
+                  catálogo interactivo.
                 </p>
               </div>
             </div>
@@ -582,8 +473,9 @@ export function SpacePlanner() {
                 </ul>
               ) : (
                 <div className="planner-preview-placeholder">
-                  Si aún no elegiste modelos en el catálogo, la IA puede
-                  sugerir qué tipos de mobiliario se adaptan mejor a tu espacio.
+                  Aún no has agregado modelos desde el catálogo. La IA igual
+                  puede sugerirte qué tipos de sillas (ejecutiva, operativa,
+                  lounge, longarinas, etc.) se adaptan mejor a tu espacio.
                 </div>
               )}
             </div>
@@ -595,8 +487,8 @@ export function SpacePlanner() {
                 <p>
                   Completa los datos del espacio y haz clic en{" "}
                   <strong>&quot;Obtener asesoría con IA&quot;</strong> para ver
-                  aquí una recomendación corta y clara de distribución y
-                  mobiliario.
+                  aquí una recomendación detallada de distribución, tipos de
+                  sillas y zonas clave para tu oficina.
                 </p>
               )}
             </div>
