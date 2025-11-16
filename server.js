@@ -40,38 +40,6 @@ function styleLabel(style) {
   }
 }
 
-// Helper para recortar a pocas frases
-function trimToShortText(text) {
-  if (!text) return "";
-
-  // compactar espacios
-  let cleaned = text.replace(/\s+/g, " ").trim();
-
-  // cortar por oraciones (., ?, !)
-  const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(Boolean);
-
-  // nos quedamos con máximo 3 frases
-  let short = sentences.slice(0, 3).join(" ");
-
-  // límite de caracteres por si acaso (ej. 260)
-  const MAX_CHARS = 260;
-  if (short.length > MAX_CHARS) {
-    short = short.slice(0, MAX_CHARS);
-
-    // cortar hasta el último punto para que no quede frase cortada feo
-    const lastDot = short.lastIndexOf(".");
-    const lastQ = short.lastIndexOf("?");
-    const lastE = short.lastIndexOf("!");
-
-    const cutAt = Math.max(lastDot, lastQ, lastE);
-    if (cutAt > 40) {
-      short = short.slice(0, cutAt + 1);
-    }
-  }
-
-  return short.trim();
-}
-
 // === ENDPOINT IA SOLO TEXTO ===
 app.post("/api/space-planner", async (req, res) => {
   try {
@@ -126,42 +94,36 @@ ${cartSummary}
 Notas adicionales del cliente:
 ${extraNotes || "Sin notas adicionales."}
 
-Instrucciones para la respuesta (SÍGUELAS AL PIE DE LA LETRA):
+Instrucciones para la respuesta:
 
-Redacta una recomendación MUY BREVE para el cliente, explicando de forma general:
-- cómo conviene organizar el espacio y
-- qué tipos de sillas o zonas son más útiles.
+Redacta una recomendación muy corta y directa para el cliente, explicando en general cómo conviene organizar el espacio, qué tipos de sillas o zonas serían más útiles y una idea general de combinación de mobiliario.
 
 La respuesta debe cumplir estrictamente estas reglas:
-1) Extensión: entre 2 y 3 frases en total, máximo 70 palabras.
+1) Extensión: entre 2 y 3 frases en total (máximo ~60 palabras).
 2) Usa solo 1 párrafo.
 3) No uses títulos, encabezados ni secciones. No escribas cosas como "1)", "Resumen", "Recomendaciones finales" ni "###".
-4) No uses listas, viñetas, guiones, numeraciones, emojis ni símbolos como *, #, -, •.
-5) Escribe en tono profesional pero cercano, con lenguaje simple.
-6) Integra los datos dentro del texto de forma natural, sin repetirlos en forma de listado.
+4) No uses listas, viñetas, guiones, numeraciones, emojis ni símbolos como *, # o •.
+5) Escribe en tono profesional pero muy conciso, como si respondieras por WhatsApp a un cliente ocupado.
+6) Ve directo al punto, sin introducciones ni conclusiones genéricas, sin repetir todos los datos del proyecto.
 
 Devuelve únicamente el texto final para el cliente, sin explicaciones adicionales.
 `;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.3,
-      max_tokens: 120, // techo duro por si se descontrola
       messages: [
         {
           role: "system",
           content:
-            "Eres un asesor experto en diseño de oficinas para la marca de mobiliario Mobicorp. Respondes siempre en español, con tono profesional pero cercano. Escribes solo texto plano en 1 párrafo, con 2 o 3 frases en total, sin superar unas 70 palabras. No usas títulos, listas, numeraciones, ni emojis, ni símbolos como *, #, -, •, ni '###'.",
+            "Eres un asesor experto en diseño de oficinas para la marca de mobiliario Mobicorp. Respondes siempre en español, con tono profesional pero muy conciso. Escribes solo texto plano en un único párrafo, con 2 o 3 frases cortas (máximo ~60 palabras). No usas títulos, ni listas, ni numeraciones, ni emojis, ni símbolos como *, #, -, •. Nunca uses encabezados como '1)' o '###'. Ve directo al punto.",
         },
         { role: "user", content: userPrompt },
       ],
     });
 
-    const raw =
+    const suggestionText =
       completion.choices[0]?.message?.content?.trim() ||
-      "Propuesta generada: revisa dimensiones, tipo de espacio y selección de productos para definir un layout equilibrado entre comodidad y cantidad de puestos.";
-
-    const suggestionText = trimToShortText(raw);
+      "Propuesta generada: distribuye los puestos de forma ordenada, combinando sillas ejecutivas y operativas según el rol, dejando zonas claras de circulación y espera.";
 
     res.json({ suggestionText });
   } catch (err) {

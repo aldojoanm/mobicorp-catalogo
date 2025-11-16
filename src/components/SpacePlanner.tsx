@@ -7,6 +7,12 @@ import "./SpacePlanner.css";
 
 const WHATSAPP_NUMBER = "59169780623";
 
+// === URL DEL BACKEND DE IA ===
+// En producción (Netlify) pon VITE_SPACE_PLANNER_URL con la URL completa de tu backend,
+// por ejemplo: https://tu-backend.onrender.com/api/space-planner
+const SPACE_PLANNER_URL =
+  import.meta.env.VITE_SPACE_PLANNER_URL || "/api/space-planner";
+
 // ====== TIPOS DEL BACKEND ======
 type ApiProducto = {
   idProducto: number;
@@ -212,13 +218,19 @@ export function SpacePlanner() {
       setIsGenerating(true);
       setSuggestionText("");
 
-      // Texto compacto que el backend puede usar como prompt si quiere
+      // Texto compacto que el backend puede usar como hint
       const promptHintLines: string[] = [];
 
-      promptHintLines.push("Genera una recomendación clara y breve para amoblar este espacio de oficina.");
+      promptHintLines.push(
+        "Genera una recomendación muy breve y clara para amoblar este espacio de oficina."
+      );
       promptHintLines.push("");
       promptHintLines.push("Datos del espacio:");
-      promptHintLines.push(`- Dimensiones (m): ancho ${width || "?"}, largo ${length || "?"}, altura ${height || "?"}`);
+      promptHintLines.push(
+        `- Dimensiones (m): ancho ${width || "?"}, largo ${
+          length || "?"
+        }, altura ${height || "?"}`
+      );
       if (seats) promptHintLines.push(`- Puestos de trabajo: ${seats}`);
       promptHintLines.push(`- Tipo de espacio: ${spaceType}`);
       promptHintLines.push(`- Estilo: ${style}`);
@@ -243,7 +255,7 @@ export function SpacePlanner() {
 
       promptHintLines.push("");
       promptHintLines.push(
-        "Devuelve un texto corto, directo y fácil de leer. Usa frases simples y evita repetir información."
+        "Devuelve un texto muy corto, directo y fácil de leer, sin listas ni títulos."
       );
 
       const promptHint = promptHintLines.join("\n");
@@ -268,7 +280,7 @@ export function SpacePlanner() {
         promptHint,
       };
 
-      const resp = await fetch("/api/space-planner", {
+      const resp = await fetch(SPACE_PLANNER_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -293,7 +305,9 @@ export function SpacePlanner() {
   const handleSendWhatsApp = () => {
     const lines: string[] = [];
 
-    lines.push("Hola 👋 Me gustaría asesoría para amoblar un espacio con Mobicorp.");
+    lines.push(
+      "Hola 👋 Me gustaría asesoría para amoblar un espacio con Mobicorp."
+    );
     lines.push("");
 
     lines.push("📐 Medidas aproximadas");
